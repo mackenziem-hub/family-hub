@@ -28,14 +28,13 @@ the business Ryujin platform.
 
 ### 2. Seed the users and kids
 - `cp .env.example .env.local`, fill `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`.
-- `cp family.example.json family.local.json`, fill in your users + kids (this file is gitignored).
+- `cp family.example.json family.local.json`, then fill in your users + kids (names, emails,
+  fresh passwords, kid profiles). This file is gitignored and is the only place real family
+  data lives; it is never committed.
 - `npm install`
-- Copy `family.example.json` to `family.local.json` and fill in your users + kids (names, emails,
-  passwords, kid profiles). This file is gitignored and is the only place real family data lives.
 - `npm run seed` (inserts the users from family.local.json with scrypt-hashed passwords).
 - `npm run seed:kids` (inserts the kids from family.local.json with their affirming profile notes).
 - `npm run seed:places` (inserts the curated Moncton/NB venues + day trips).
-- Clear the two `SEED_*` values from `.env.local` afterward.
 
 ### 3. Vercel project
 - `npx vercel` once in this folder to link/create the project (note the assigned domain).
@@ -80,7 +79,7 @@ The one step that needs your Google account in a browser:
 ## Final connections checklist (the human-only steps)
 
 1. Create the Supabase project; run migrations `001`-`006`; create the private `meal-photos` bucket.
-2. `npm install`, fill `.env.local`, `npm run seed`, `npm run seed:kids`, `npm run seed:places`, then clear `SEED_*`.
+2. `npm install`, fill `.env.local` + `family.local.json`, then `npm run seed`, `npm run seed:kids`, `npm run seed:places`.
 3. `npx vercel` to create the Vercel project; add every env var (Production + Preview); `npm run deploy`.
 4. Mint `ANTHROPIC_API_KEY`; grab the calendar `GOOGLE_CALENDAR_ICS_URL` (read-only fallback).
 5. Google OAuth client (step 6) + both connect on the Calendar tab.
