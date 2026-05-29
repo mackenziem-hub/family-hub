@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>Family Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/app.css" />
+  <script src="/assets/auth-guard.js"></script>
+</head>
+<body>
+  <div class="app has-composer">
+    <div class="app-header">
+      <div>
+        <h1>Family <span class="brand-dot">Hub</span></h1>
+        <div class="sub" id="greeting">Welcome back</div>
+      </div>
+      <button class="btn ghost" id="signOut" style="padding:8px 14px;font-size:13px;">Sign out</button>
+    </div>
+
+    <div class="strip">
+      <a class="tile" href="/groceries.html" style="text-decoration:none;color:inherit;">
+        <div class="k">Groceries to buy</div>
+        <div class="v" id="groceryCount">--</div>
+      </a>
+      <a class="tile" href="/calendar.html" style="text-decoration:none;color:inherit;">
+        <div class="k">Next up</div>
+        <div class="v" id="nextEvent" style="font-size:14px;font-weight:700;line-height:1.3;">--</div>
+      </a>
+    </div>
+
+    <div class="chat-log" id="chatLog"></div>
+  </div>
+
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Ask anything, or add to the list, check the week..." autocomplete="off"></textarea>
+    <button class="btn send" id="sendBtn" title="Send">↑</button>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script src="/assets/tabbar.js"></script>
+  <script>
+    (function () {
+      const log = document.getElementById('chatLog');
+      const input = document.getElementById('input');
+      const sendBtn = document.getElementById('sendBtn');
+      let busy = false;
+
+      const user = window.FamilyAuth && window.FamilyAuth.user;
+      if (user && user.name) document.getElementById('greeting').textContent = `Hi ${user.name}`;
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+      function scrollDown() { window.scrollTo(0, document.body.scrollHeight); }
+
+      function addBubble(role, text) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + role;
+        div.textContent = text || '';
+        log.appendChild(div);
+        scrollDown();
+        return div;
+      }
+      function addTool(name, ok) {
+        const labels = {
+          add_grocery_item: 'Adding to groceries', check_off_grocery: 'Checking off',
+          list_groceries: 'Reading the list', get_calendar: 'Checking the calendar',
+        };
+        const div = document.createElement('div');
+        div.className = 'msg tool';
+        div.textContent = (ok === false ? '⚠ ' : '✓ ') + (labels[name] || name);
+        log.appendChild(div);
+        scrollDown();
+      }
+
+      // Auto-grow textarea.
+      input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      });
+      sendBtn.addEventListener('click', send);
+
+      async function send() {
+        const text = input.value.trim();
+        if (!text || busy) return;
+        busy = true; sendBtn.disabled = true;
+        input.value = ''; input.style.height = 'auto';
+        addBubble('user', text);
+        const assistant = addBubble('assistant', '');
+        assistant.innerHTML = '<span class="spin"></span>';
+        let started = false;
+
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...window.FamilyAuth.headers() },
+            body: JSON.stringify({ message: text }),
+          });
+          if (res.status === 401) { window.FamilyAuth.clearAndRedirect(); return; }
+          if (!res.ok || !res.body) {
+            let msg = 'Something went wrong.';
+            try { msg = (await res.json()).message || msg; } catch {}
+            assistant.className = 'msg err'; assistant.textContent = msg;
+            return;
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const events = buf.split('\n\n');
+            buf = events.pop() || '';
+            for (const ev of events) {
+              let dataLine = null;
+              for (const l of ev.split('\n')) if (l.startsWith('data: ')) dataLine = l.slice(6);
+              if (!dataLine) continue;
+              let d; try { d = JSON.parse(dataLine); } catch { continue; }
+              if (d.type === 'text') {
+                if (!started) { assistant.textContent = ''; started = true; }
+                assistant.textContent += d.text; scrollDown();
+              } else if (d.type === 'tool_start') {
+                // show after the (possibly empty) assistant bubble
+                addTool(d.name);
+              } else if (d.type === 'tool_end') {
+                if (d.ok === false) addTool(d.name, false);
+              } else if (d.type === 'error') {
+                assistant.className = 'msg err'; assistant.textContent = d.message || 'Assistant error.';
+              } else if (d.type === 'done') {
+                if (!started && assistant.textContent.indexOf('spin') === -1 && !assistant.textContent) {
+                  assistant.textContent = 'Done.';
+                }
+              }
+            }
+          }
+          if (!started && assistant.querySelector && assistant.querySelector('.spin')) {
+            assistant.textContent = 'Done.';
+          }
+        } catch (err) {
+          assistant.className = 'msg err'; assistant.textContent = 'Network error. Try again.';
+        } finally {
+          busy = false; sendBtn.disabled = false; input.focus(); scrollDown();
+        }
+      }
+
+      // Load history + dashboard.
+      api.get('/api/chat').then((data) => {
+        const msgs = (data && data.messages) || [];
+        if (!msgs.length) {
+          addBubble('assistant', `Hi${user && user.name ? ' ' + user.name : ''}. I can add to the grocery list, tell you what's on the calendar, log meals, and help with ideas for the kids. What do you need?`);
+        } else {
+          for (const m of msgs) addBubble(m.role === 'user' ? 'user' : 'assistant', m.content);
+        }
+        // Deep link from other pages: /home.html?ask=... prefills and sends.
+        const ask = new URLSearchParams(location.search).get('ask');
+        if (ask && !busy) { input.value = ask; window.history.replaceState(null, '', '/home.html'); send(); }
+      }).catch(() => {});
+
+      api.get('/api/groceries').then((items) => {
+        document.getElementById('groceryCount').textContent = String((items || []).filter((i) => !i.checked).length);
+      }).catch(() => {});
+
+      api.get('/api/calendar?days=7').then((data) => {
+        const el = document.getElementById('nextEvent');
+        if (!data || !data.configured) { el.textContent = 'Connect calendar'; return; }
+        const e = (data.events || [])[0];
+        if (!e) { el.textContent = 'Clear week'; return; }
+        const when = e.allDay
+          ? new Date(e.startTime).toLocaleDateString(undefined, { weekday: 'short' })
+          : new Date(e.startTime).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+        el.textContent = e.summary.slice(0, 28) + (e.summary.length > 28 ? '…' : '');
+        el.title = e.summary + ' (' + when + ')';
+      }).catch(() => {});
+
+      document.getElementById('signOut').addEventListener('click', async () => {
+        try { await api.post('/api/auth?action=logout'); } catch {}
+        window.FamilyAuth.clearAndRedirect();
+      });
+    })();
+  </script>
+</body>
+</html>

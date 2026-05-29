@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>Kids - Family Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/app.css" />
+  <script src="/assets/auth-guard.js"></script>
+  <style>
+    .kidname { font-size: 17px; font-weight: 800; }
+    .notes { font-size: 13px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
+    .ideabtns { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .seg { display: flex; gap: 8px; margin-bottom: 12px; }
+    .seg button { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="app-header"><div><h1>🧸 Kids</h1><div class="sub">Activities &amp; conversation</div></div></div>
+
+    <div id="kids"></div>
+
+    <div class="card">
+      <h2>Saved ideas</h2>
+      <div class="seg">
+        <button class="btn ghost" id="tabAct" data-kind="activity">Activities</button>
+        <button class="btn ghost" id="tabTop" data-kind="topic">Conversation</button>
+      </div>
+      <ul class="list" id="saved"></ul>
+      <div class="empty" id="savedEmpty" hidden>Nothing saved yet. Ask the assistant for ideas, then save the ones you like.</div>
+    </div>
+
+    <p class="toast" id="error"></p>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script src="/assets/tabbar.js"></script>
+  <script>
+    (function () {
+      const kidsEl = document.getElementById('kids');
+      const savedEl = document.getElementById('saved');
+      const savedEmpty = document.getElementById('savedEmpty');
+      const errorEl = document.getElementById('error');
+      let kind = 'activity';
+      let savedEpoch = 0;
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+      function go(prompt) { location.href = '/home.html?ask=' + encodeURIComponent(prompt); }
+
+      function renderKids(kids) {
+        if (!kids.length) {
+          kidsEl.innerHTML = `<div class="card"><div class="empty">No kid profiles yet. Run the kids seed, or add one from the assistant.</div></div>`;
+          return;
+        }
+        kidsEl.innerHTML = kids.map((k) => {
+          const age = k.age != null ? `age ${k.age}` : '';
+          return `<div class="card glow">
+            <div class="kidname">${esc(k.name)} ${age ? `<span class="badge" style="font-size:11px;">${age}</span>` : ''}</div>
+            <div class="notes">${esc((k.notes || '').slice(0, 320))}${(k.notes || '').length > 320 ? '…' : ''}</div>
+            <div class="ideabtns">
+              <button class="btn" data-act="activity" data-name="${esc(k.name)}">Activity idea</button>
+              <button class="btn ghost" data-act="topic" data-name="${esc(k.name)}">Conversation starter</button>
+            </div>
+          </div>`;
+        }).join('');
+        kidsEl.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
+          const name = b.dataset.name;
+          if (b.dataset.act === 'activity') {
+            go(`Suggest one activity for ${name} to do right now, built around their interests. Include a short preview, 2 to 4 small steps, a two-option choice, and both a calm amp-down version and a heavy-work/movement version. Keep it to one idea.`);
+          } else {
+            go(`Give me one declarative conversation starter (a comment or an "I wonder..." opener, not a question barrage) to connect with ${name} through their interests right now.`);
+          }
+        }));
+      }
+
+      function renderSaved(items) {
+        savedEmpty.hidden = items.length > 0;
+        savedEl.innerHTML = items.map((s) => `<li class="list-item" data-id="${s.id}">
+          <div class="body">
+            <div class="name">${esc(s.title)}</div>
+            ${s.detail ? `<div class="meta">${esc(s.detail.slice(0, 160))}${s.detail.length > 160 ? '…' : ''}</div>` : ''}
+          </div>
+          <div class="x" data-act="del" title="Remove">✕</div>
+        </li>`).join('');
+      }
+
+      async function loadKids() {
+        try { renderKids(await api.get('/api/kids')); }
+        catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      }
+      async function loadSaved() {
+        const epoch = ++savedEpoch;
+        try {
+          const items = await api.get('/api/saved-items?kind=' + kind);
+          if (epoch !== savedEpoch) return; // a newer tab switch superseded this fetch
+          renderSaved(items);
+        } catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      }
+
+      savedEl.addEventListener('click', async (ev) => {
+        if (ev.target.dataset.act !== 'del') return;
+        const id = ev.target.closest('.list-item').dataset.id;
+        try { await api.del('/api/saved-items?id=' + encodeURIComponent(id)); loadSaved(); }
+        catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      });
+
+      function setKind(k) {
+        kind = k;
+        document.getElementById('tabAct').classList.toggle('btn', true);
+        document.getElementById('tabAct').className = 'btn ' + (k === 'activity' ? '' : 'ghost');
+        document.getElementById('tabTop').className = 'btn ' + (k === 'topic' ? '' : 'ghost');
+        loadSaved();
+      }
+      document.getElementById('tabAct').addEventListener('click', () => setKind('activity'));
+      document.getElementById('tabTop').addEventListener('click', () => setKind('topic'));
+
+      loadKids();
+      setKind('activity');
+    })();
+  </script>
+</body>
+</html>

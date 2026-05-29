@@ -1,0 +1,17 @@
+{
+  "name": "family-hub",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal/family assistant app (groceries, calendar, nutrition, kids).",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "seed": "node scripts/seed-users.mjs",
+    "seed:kids": "node scripts/seed-kids.mjs",
+    "seed:places": "node scripts/seed-places.mjs",
+    "deploy": "vercel --prod --yes"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0"
+  }
+}

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>Food - Family Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/app.css" />
+  <script src="/assets/auth-guard.js"></script>
+  <style>
+    .bar { height: 8px; border-radius: 999px; background: var(--bg-2); overflow: hidden; margin-top: 4px; }
+    .bar > span { display: block; height: 100%; background: var(--accent); }
+    .macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+    .macros .m .k { font-size: 11px; color: var(--text-dim); }
+    .macros .m .val { font-size: 14px; font-weight: 700; }
+    .bigcal { font-size: 30px; font-weight: 800; }
+    .chip { display: inline-block; background: var(--bg-2); border: 1px solid var(--border-soft); color: var(--text-dim);
+      border-radius: 999px; padding: 6px 11px; font-size: 12px; margin: 3px 4px 0 0; cursor: pointer; }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--bg-2); color: var(--text-dim); margin-left: 6px; }
+    .disc { font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center; }
+    .draftcard { border-top: 2px solid var(--accent); }
+    .kcal-edit { width: 90px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="app-header"><div><h1>🍎 Food</h1><div class="sub" id="sub">Today</div></div></div>
+
+    <div class="card glow">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <div><div class="muted">Calories today</div><div class="bigcal" id="kcal">--</div></div>
+        <button class="btn ghost" id="targetBtn" style="padding:7px 12px;font-size:12px;">Set target</button>
+      </div>
+      <div class="bar"><span id="kcalBar" style="width:0%"></span></div>
+      <div class="macros">
+        <div class="m"><div class="k">Protein</div><div class="val" id="mP">--</div></div>
+        <div class="m"><div class="k">Carbs</div><div class="val" id="mC">--</div></div>
+        <div class="m"><div class="k">Fat</div><div class="val" id="mF">--</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <form id="logForm" class="row" style="align-items:flex-end;">
+        <div class="field" style="flex:1;margin:0;">
+          <label for="desc">Log a meal</label>
+          <input class="input" id="desc" placeholder="e.g. chicken caesar wrap and a latte" autocomplete="off" />
+        </div>
+        <button class="btn" id="logBtn" type="submit" style="flex:0 0 auto;">Log</button>
+      </form>
+      <div style="margin-top:10px;">
+        <button class="btn ghost block" id="snapBtn">📷 Snap a meal</button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
+      </div>
+      <p class="toast" id="error"></p>
+    </div>
+
+    <div id="draftZone"></div>
+
+    <div class="card">
+      <h2>Today's meals</h2>
+      <ul class="list" id="list"></ul>
+      <div class="empty" id="empty" hidden>Nothing logged yet today.</div>
+    </div>
+    <div class="card" id="fitnessCard" hidden>
+      <h2>Activity</h2>
+      <div id="fitnessBody"><div class="muted">Loading...</div></div>
+    </div>
+
+    <div class="card" id="activeCard" hidden>
+      <h2>Move together</h2>
+      <p class="muted" id="activeIdea">A small, optional play idea for the family.</p>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn ghost" id="getPlay">Get an idea</button>
+        <button class="btn" id="didPlay">We did it 🎉</button>
+      </div>
+    </div>
+
+    <div class="disc">Calorie and macro numbers are AI estimates and can be off. Not medical advice.</div>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script src="/assets/tabbar.js"></script>
+  <script>
+    (function () {
+      const errorEl = document.getElementById('error');
+      const listEl = document.getElementById('list');
+      const emptyEl = document.getElementById('empty');
+      const draftZone = document.getElementById('draftZone');
+      let target = null;
+      let lastPhoto = null; // { base64, mediaType, caption }
+      let photoPending = false;
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+      function pct(a, b) { return b ? Math.min(100, Math.round((a / b) * 100)) : 0; }
+
+      function renderSummary(totals, tgt) {
+        target = tgt;
+        const t = totals || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+        document.getElementById('kcal').textContent = tgt && tgt.calorie_target
+          ? `${t.calories} / ${tgt.calorie_target}` : String(t.calories);
+        document.getElementById('kcalBar').style.width = pct(t.calories, tgt && tgt.calorie_target) + '%';
+        document.getElementById('mP').textContent = `${t.protein_g}g`;
+        document.getElementById('mC').textContent = `${t.carbs_g}g`;
+        document.getElementById('mF').textContent = `${t.fat_g}g`;
+      }
+
+      function renderList(entries) {
+        emptyEl.hidden = entries.length > 0;
+        listEl.innerHTML = entries.map((e) => {
+          const range = (e.calorie_low && e.calorie_high) ? ` (${e.calorie_low}-${e.calorie_high})` : '';
+          const badge = e.source === 'photo' ? 'photo' : e.source === 'ai_estimate' ? 'AI' : 'manual';
+          return `<li class="list-item" data-id="${e.id}">
+            <div class="body">
+              <div class="name">${esc(e.description)}<span class="badge">${badge}</span></div>
+              <div class="meta">${e.calories || 0} kcal${range} · ${e.protein_g || 0}p / ${e.carbs_g || 0}c / ${e.fat_g || 0}f</div>
+            </div>
+            <div class="x" data-act="del" title="Remove">✕</div>
+          </li>`;
+        }).join('');
+      }
+
+      async function load() {
+        try {
+          const data = await api.get('/api/nutrition');
+          renderSummary(data.totals, data.target);
+          renderList(data.entries || []);
+        } catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      }
+
+      listEl.addEventListener('click', async (ev) => {
+        if (ev.target.dataset.act !== 'del') return;
+        const li = ev.target.closest('.list-item'); const id = li.dataset.id;
+        try { await api.del('/api/nutrition?id=' + encodeURIComponent(id)); load(); }
+        catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      });
+
+      // Text log.
+      document.getElementById('logForm').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        errorEl.textContent = '';
+        const descEl = document.getElementById('desc');
+        const description = descEl.value.trim();
+        if (!description) return;
+        const btn = document.getElementById('logBtn');
+        btn.disabled = true; btn.textContent = '...';
+        try {
+          await api.post('/api/nutrition', { description });
+          descEl.value = ''; load();
+        } catch (e) {
+          errorEl.textContent = e.message === 'estimator_not_configured' ? 'Add ANTHROPIC_API_KEY to enable meal estimates.' : e.message;
+        } finally { btn.disabled = false; btn.textContent = 'Log'; }
+      });
+
+      // Photo flow.
+      document.getElementById('snapBtn').addEventListener('click', () => document.getElementById('photoInput').click());
+      document.getElementById('photoInput').addEventListener('change', async (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        ev.target.value = '';
+        if (!file) return;
+        errorEl.textContent = '';
+        try {
+          const base64 = await downscale(file, 1280, 0.8);
+          lastPhoto = { base64, mediaType: 'image/jpeg', caption: '' };
+          await runPhoto();
+        } catch (e) { errorEl.textContent = 'Could not read that image.'; }
+      });
+
+      function downscale(file, maxDim, quality) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            let { width, height } = img;
+            if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+            else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+          };
+          img.onerror = reject;
+          img.src = url;
+        });
+      }
+
+      async function runPhoto() {
+        if (photoPending || !lastPhoto) return; // ignore taps while a request is in flight
+        photoPending = true;
+        const snapshot = { ...lastPhoto }; // stable per-request copy
+        draftZone.innerHTML = `<div class="card draftcard"><div class="empty"><span class="spin"></span> Reading your meal...</div></div>`;
+        try {
+          const { draft } = await api.post('/api/meal-photo', {
+            image: snapshot.base64, media_type: snapshot.mediaType, caption: snapshot.caption || undefined,
+          });
+          renderDraft(draft);
+        } catch (e) {
+          draftZone.innerHTML = '';
+          errorEl.textContent = e.message === 'estimator_not_configured' ? 'Add ANTHROPIC_API_KEY to enable photo estimates.' : (e.message || 'Photo read failed.');
+        } finally {
+          photoPending = false;
+        }
+      }
+
+      function renderDraft(draft) {
+        const items = (draft.items || []).map((it) =>
+          `<span class="chip" style="cursor:default;">${esc(it.name)} ~${it.calories || '?'}kcal</span>`).join('');
+        const qs = (draft.clarifying_questions || []).map((q) =>
+          `<span class="chip" data-q="${esc(q)}">${esc(q)}</span>`).join('');
+        draftZone.innerHTML = `<div class="card draftcard">
+          <h2>Estimate <span class="badge">${esc(draft.confidence || 'med')} confidence</span></h2>
+          <div class="muted">${draft.calorie_low || '?'}-${draft.calorie_high || '?'} kcal range</div>
+          <div class="row" style="margin-top:8px;align-items:center;">
+            <div style="flex:0 0 auto;">Calories <input class="input kcal-edit" id="draftKcal" type="number" value="${draft.calories || 0}"></div>
+            <div style="flex:1;font-size:12px;color:var(--text-dim);">${draft.protein_g || 0}p / ${draft.carbs_g || 0}c / ${draft.fat_g || 0}f</div>
+          </div>
+          <div style="margin-top:8px;">${items}</div>
+          ${draft.assumptions ? `<div class="meta" style="margin-top:8px;">${esc(draft.assumptions)}</div>` : ''}
+          ${qs ? `<div style="margin-top:8px;"><div class="muted" style="font-size:12px;">Tap to refine:</div>${qs}</div>` : ''}
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" id="confirmDraft">Looks right</button>
+            <button class="btn ghost" id="cancelDraft">Cancel</button>
+          </div>
+        </div>`;
+
+        draftZone.querySelectorAll('[data-q]').forEach((el) => el.addEventListener('click', () => {
+          lastPhoto.caption = (lastPhoto.caption + ' ' + el.dataset.q).trim();
+          runPhoto();
+        }));
+        document.getElementById('cancelDraft').addEventListener('click', () => { draftZone.innerHTML = ''; lastPhoto = null; });
+        document.getElementById('confirmDraft').addEventListener('click', async () => {
+          const editedKcal = parseInt(document.getElementById('draftKcal').value, 10);
+          const corrected = Number.isFinite(editedKcal) && editedKcal !== draft.calories;
+          try {
+            await api.post('/api/nutrition', {
+              description: lastPhoto.caption || 'Photo meal',
+              calories: Number.isFinite(editedKcal) ? editedKcal : draft.calories,
+              protein_g: draft.protein_g, carbs_g: draft.carbs_g, fat_g: draft.fat_g,
+              calorie_low: draft.calorie_low, calorie_high: draft.calorie_high,
+              assumptions: draft.assumptions, confidence: draft.confidence,
+              items: draft.items, source: 'photo', photo_path: draft.photo_path, meal_slot: draft.meal_slot, corrected,
+            });
+            draftZone.innerHTML = ''; lastPhoto = null; load();
+          } catch (e) { errorEl.textContent = e.message; }
+        });
+      }
+
+      // Set target.
+      document.getElementById('targetBtn').addEventListener('click', async () => {
+        const cur = target && target.calorie_target ? target.calorie_target : '';
+        const val = prompt('Daily calorie target (leave blank to clear):', cur);
+        if (val === null) return;
+        const n = parseInt(val, 10);
+        try {
+          await api.patch('/api/nutrition', { calorie_target: Number.isFinite(n) ? n : null });
+          load();
+        } catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      });
+
+      // Fitbit activity card.
+      async function loadFitness() {
+        const card = document.getElementById('fitnessCard');
+        const body = document.getElementById('fitnessBody');
+        let status;
+        try { status = await api.get('/api/fitbit-oauth?action=status'); } catch { return; }
+        if (!status.configured && !status.connected) { card.hidden = true; return; }
+        card.hidden = false;
+        if (!status.connected) {
+          body.innerHTML = `<p class="muted">Connect Fitbit to see steps and activity here. Gentle trends only, no targets.</p><button class="btn block" id="connectFitbit">Connect Fitbit</button>`;
+          document.getElementById('connectFitbit').addEventListener('click', async () => {
+            try { const { url } = await api.get('/api/fitbit-oauth?action=start'); window.location.href = url; }
+            catch (e) { errorEl.textContent = e.message; }
+          });
+          return;
+        }
+        body.innerHTML = '<div class="muted">Syncing Fitbit...</div>';
+        try {
+          const f = await api.get('/api/fitness');
+          if (f.busy) { body.innerHTML = '<div class="muted">Fitbit is busy, check back shortly.</div>'; return; }
+          const t = f.today || {};
+          const n = (v) => (v != null ? Number(v).toLocaleString() : '--');
+          body.innerHTML = `<div class="macros">
+            <div class="m"><div class="k">Steps</div><div class="val">${n(t.steps)}</div></div>
+            <div class="m"><div class="k">Active min</div><div class="val">${t.active_minutes != null ? t.active_minutes : '--'}</div></div>
+            <div class="m"><div class="k">Cals out</div><div class="val">${n(t.calories_out)}</div></div>
+          </div><p class="muted" style="margin-top:8px;">Nice moving today. Trends only, no targets.</p>`;
+        } catch { body.innerHTML = '<div class="muted">Could not load Fitbit right now.</div>'; }
+      }
+
+      // Move-together (active) card. Hidden if the active API is not available yet.
+      async function loadActive() {
+        const card = document.getElementById('activeCard');
+        try {
+          const data = await api.get('/api/active?ideas=1');
+          card.hidden = false;
+          if (data && data.idea) document.getElementById('activeIdea').textContent = data.idea;
+        } catch { card.hidden = true; }
+      }
+      document.getElementById('getPlay').addEventListener('click', async () => {
+        try { const data = await api.get('/api/active?ideas=1&fresh=1'); if (data && data.idea) document.getElementById('activeIdea').textContent = data.idea; }
+        catch (e) { errorEl.textContent = e.message; }
+      });
+      document.getElementById('didPlay').addEventListener('click', async () => {
+        try { await api.post('/api/active', { note: document.getElementById('activeIdea').textContent }); document.getElementById('didPlay').textContent = 'Logged 🎉'; }
+        catch (e) { errorEl.textContent = e.message; }
+      });
+
+      // Fitbit OAuth return toast.
+      const fb = new URLSearchParams(location.search).get('fitbit');
+      if (fb === 'connected') { errorEl.style.color = 'var(--success)'; errorEl.textContent = 'Fitbit connected.'; window.history.replaceState(null, '', '/food.html'); }
+      else if (fb) { errorEl.textContent = 'Fitbit connect did not finish. Try again.'; window.history.replaceState(null, '', '/food.html'); }
+
+      load();
+      loadFitness();
+      loadActive();
+    })();
+  </script>
+</body>
+</html>

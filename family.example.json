@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy this file to family.local.json (which is gitignored) and fill in real values. The seed scripts read family.local.json. Never commit real names, emails, passwords, or children's information.",
+  "users": [
+    { "name": "Parent One", "email": "parent1@example.com", "password": "set-a-fresh-password" },
+    { "name": "Parent Two", "email": "parent2@example.com", "password": "set-a-fresh-password" }
+  ],
+  "kids": [
+    {
+      "name": "Child One",
+      "birthdate": null,
+      "notes": "Affirming, interest-led, sensory-aware profile the assistant uses as context. Describe the child's interests/strengths first, what helps them, how to handle transitions, and how to connect. If a parent describes a possible diagnosis, write it as a parent observation, not a fact, and never label severity or functioning. Example shape: 'Age N, pronouns. Loves <interest> - this is their strength and the best entry point. Parents describe <possible trait>; not formally diagnosed, so treat as observation. What helps: ... Transitions: ... Connect through ... Sensory: note an amp-down and a heavy-work option. Celebrate effort, not the result.'"
+    },
+    {
+      "name": "Child Two",
+      "birthdate": null,
+      "notes": "Second child's affirming profile, same shape as above."
+    }
+  ]
+}

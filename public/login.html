@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>Family Hub - Sign in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="app-header">
+      <div>
+        <h1>Family <span class="brand-dot">Hub</span></h1>
+        <div class="sub">Sign in to your family hub</div>
+      </div>
+    </div>
+
+    <div class="card glow">
+      <h2>Sign in</h2>
+      <form id="loginForm">
+        <div class="field">
+          <label for="email">Email</label>
+          <input class="input" id="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input class="input" id="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="btn block" id="submitBtn" type="submit">Sign in</button>
+        <p class="toast" id="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorEl = document.getElementById('error');
+    const btn = document.getElementById('submitBtn');
+
+    // If already signed in, skip the form.
+    try { if (localStorage.getItem('family_token')) location.replace(nextUrl()); } catch {}
+
+    function nextUrl() {
+      const p = new URLSearchParams(location.search).get('next');
+      // Only allow same-origin relative paths.
+      return (p && p.startsWith('/') && !p.startsWith('//')) ? p : '/home.html';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+      try {
+        const res = await fetch('/api/auth?action=login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sign in failed');
+        localStorage.setItem('family_token', data.token);
+        localStorage.setItem('family_user', JSON.stringify(data.user));
+        location.replace(nextUrl());
+      } catch (err) {
+        errorEl.textContent = err.message;
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>
