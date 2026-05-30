@@ -21,6 +21,19 @@
       <button class="btn ghost" id="signOut" style="padding:8px 14px;font-size:13px;">Sign out</button>
     </div>
 
+    <div class="card glow" id="captureCard">
+      <h2>✨ Capture anything</h2>
+      <p class="muted" style="font-size:13px;margin:0 0 8px;">Paste a school email, invite, or list, or snap a photo. I'll sort the events, groceries, and to-dos.</p>
+      <textarea class="input" id="capText" rows="2" placeholder="Paste here..." style="min-height:46px;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn" id="capExtract">Sort it out</button>
+        <button class="btn ghost" id="capPhotoBtn">📷 Photo</button>
+        <input type="file" id="capFile" accept="image/*" capture="environment" hidden />
+        <span class="muted" id="capStatus" style="font-size:12px;"></span>
+      </div>
+      <div id="capReview" hidden style="margin-top:10px;"></div>
+    </div>
+
     <div class="strip">
       <a class="tile" href="/groceries.html" style="text-decoration:none;color:inherit;">
         <div class="k">Groceries to buy</div>
@@ -227,6 +240,64 @@
         } finally {
           busy = false; sendBtn.disabled = false; input.focus(); scrollDown();
         }
+      }
+
+      // ---- Magic capture: paste/photo -> extract -> review -> fan out ----
+      const capText = document.getElementById('capText');
+      const capStatus = document.getElementById('capStatus');
+      const capReview = document.getElementById('capReview');
+      let capItems = [];
+      const CAP_ICON = { event: '📅', grocery: '🛒', todo: '✅', reminder: '📌' };
+      function renderCap(items) {
+        capItems = items || [];
+        capReview.hidden = false;
+        if (!capItems.length) { capReview.innerHTML = '<div class="muted" style="font-size:13px;">Nothing to add found.</div>'; return; }
+        const rows = capItems.map((it, i) => {
+          const when = it.type === 'grocery'
+            ? (it.quantity ? esc(it.quantity) : '')
+            : ((it.all_day || !it.time) ? esc(it.date || 'no date') : esc((it.date || '') + ' ' + it.time));
+          return '<label style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border-soft);">'
+            + '<input type="checkbox" data-i="' + i + '" checked style="margin-top:3px;">'
+            + '<span><span style="font-weight:600;">' + (CAP_ICON[it.type] || '•') + ' ' + esc(it.title) + '</span>'
+            + (when ? '<br><span class="muted" style="font-size:12px;">' + when + (it.who ? ' · ' + esc(it.who) : '') + '</span>' : '')
+            + '</span></label>';
+        }).join('');
+        capReview.innerHTML = rows + '<button class="btn" id="capCommit" style="margin-top:10px;">Add ' + capItems.length + ' to the hub</button>';
+        document.getElementById('capCommit').addEventListener('click', commitCap);
+      }
+      async function commitCap() {
+        const checked = [].slice.call(capReview.querySelectorAll('input[type=checkbox]')).filter((c) => c.checked).map((c) => capItems[+c.dataset.i]);
+        if (!checked.length) return;
+        const btn = document.getElementById('capCommit'); btn.disabled = true; btn.textContent = 'Adding...';
+        try {
+          const { results } = await api.post('/api/capture', { action: 'commit', items: checked });
+          const ok = (results || []).filter((r) => r.ok).length;
+          const need = (results || []).filter((r) => r.reason === 'calendar_not_connected').length;
+          capReview.hidden = true; capText.value = '';
+          capStatus.textContent = 'Added ' + ok + (need ? ' · ' + need + ' need calendar connected' : '') + ' ✓';
+          api.get('/api/groceries').then((items) => { document.getElementById('groceryCount').textContent = String((items || []).filter((i) => !i.checked).length); }).catch(() => {});
+          setTimeout(() => { capStatus.textContent = ''; }, 5000);
+        } catch (e) { btn.disabled = false; btn.textContent = 'Add to the hub'; if (e.message !== 'unauthorized') capStatus.textContent = e.message; }
+      }
+      async function extractCap(payload) {
+        capStatus.textContent = 'Reading...';
+        try { const { items } = await api.post('/api/capture', Object.assign({ action: 'extract' }, payload)); capStatus.textContent = ''; renderCap(items); }
+        catch (e) { capStatus.textContent = (e.message === 'unauthorized') ? '' : e.message; }
+      }
+      document.getElementById('capExtract').addEventListener('click', () => { const t = capText.value.trim(); if (t) extractCap({ text: t }); });
+      document.getElementById('capPhotoBtn').addEventListener('click', () => document.getElementById('capFile').click());
+      document.getElementById('capFile').addEventListener('change', async () => {
+        const f = document.getElementById('capFile').files[0]; if (!f) return; document.getElementById('capFile').value = '';
+        capStatus.textContent = 'Reading photo...';
+        try { const base64 = await capDownscale(f, 2000, 0.8); await extractCap({ image_base64: base64, media_type: 'image/jpeg' }); }
+        catch (e) { capStatus.textContent = ''; }
+      });
+      function capDownscale(file, max, q) {
+        return new Promise((resolve, reject) => {
+          const img = new Image(); const url = URL.createObjectURL(file);
+          img.onload = () => { URL.revokeObjectURL(url); let w = img.width, h = img.height; if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); } const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h); resolve(c.toDataURL('image/jpeg', q).split(',')[1]); };
+          img.onerror = reject; img.src = url;
+        });
       }
 
       // Load history + dashboard.
