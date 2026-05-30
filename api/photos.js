@@ -57,8 +57,9 @@ async function handler(req, res) {
     if (!b64) return res.status(400).json({ error: 'image_base64 required' });
     const mediaType = body.media_type === 'image/png' ? 'image/png' : 'image/jpeg';
     const category = CATS.includes(body.category) ? body.category : 'other';
+    // Guard the encoded body size against Vercel's ~4.5MB cap (not the decoded size).
+    if (b64.length > 4_000_000) return res.status(413).json({ error: 'Image too large; please downscale.' });
     const buf = Buffer.from(b64, 'base64');
-    if (buf.length > 4_200_000) return res.status(413).json({ error: 'Image too large; please downscale.' });
 
     const ext = mediaType === 'image/png' ? 'png' : 'jpg';
     const path = `${userId}/${randomUUID()}.${ext}`;

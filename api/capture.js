@@ -91,7 +91,9 @@ async function handler(req, res) {
   if (body.action === 'extract') {
     if (!body.text && !body.image_base64) return res.status(400).json({ error: 'text or image required' });
     const b64 = String(body.image_base64 || '').replace(/^data:[^;]+;base64,/, '');
-    if (b64 && Buffer.from(b64, 'base64').length > 4_200_000) return res.status(413).json({ error: 'Image too large; downscale first.' });
+    // Guard the ENCODED size (what's actually in the request body) against Vercel's ~4.5MB
+    // body cap, not the decoded image size, or this friendly 413 never fires before the platform's.
+    if (b64 && b64.length > 4_000_000) return res.status(413).json({ error: 'Image too large; downscale first.' });
     try {
       const items = await extract({ text: body.text, image_base64: b64 || null, media_type: body.media_type });
       return res.json({ items });
