@@ -133,6 +133,15 @@
           html = '<div class="cc-h"><span class="cc-ico">📅</span> Added to calendar</div><div class="cc-line">' + esc(d.summary || 'Event') + (d.start ? '<span class="cc-when"> · ' + esc(d.start) + '</span>' : '') + '</div>';
         } else if (d.kind === 'play') {
           html = '<div class="cc-h"><span class="cc-ico">🎉</span> Nice move together</div>';
+        } else if (d.kind === 'profile') {
+          html = '<div class="cc-h"><span class="cc-ico">📝</span> Profile updated</div><div class="cc-line">' + esc((d.updated || []).join(', ')) + '</div>';
+        } else if (d.kind === 'memory') {
+          html = '<div class="cc-h"><span class="cc-ico">🧠</span> ' + (d.status === 'already known' ? 'Already knew that' : 'Remembered') + '</div><div class="cc-line">' + esc(d.content || '') + '</div>';
+        } else if (d.kind === 'freebusy') {
+          const fmt = (iso) => new Date(iso).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+          const slots = (d.slots || []).map((s) => '<div>' + fmt(s.start) + ' to ' + new Date(s.end).toLocaleString('en-CA', { hour: 'numeric', minute: '2-digit' }) + '</div>').join('');
+          const nc = (d.not_connected && d.not_connected.length) ? '<div class="cc-when">Note: ' + esc(d.not_connected.join(', ')) + ' not connected</div>' : '';
+          html = '<div class="cc-h"><span class="cc-ico">🗓️</span> Everyone free (' + d.connected + ' connected)</div>' + slots + nc;
         } else { return; }
         div.innerHTML = html; log.appendChild(div); scrollDown();
       }

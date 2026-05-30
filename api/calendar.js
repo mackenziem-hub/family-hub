@@ -5,10 +5,20 @@
 import { requireSession } from '../lib/session.js';
 import { readJson } from '../lib/http.js';
 import { getUpcomingEvents } from '../lib/calendarRead.js';
-import { insertGoogleEvent, deleteGoogleEvent, isGoogleConnected } from '../lib/google.js';
+import { insertGoogleEvent, deleteGoogleEvent, isGoogleConnected, combinedFreeBusy, invertBusyToFree } from '../lib/google.js';
 
 async function handler(req, res) {
   if (req.method === 'GET') {
+    if (req.query.action === 'freebusy') {
+      const days = Math.min(parseInt(req.query.days, 10) || 7, 14);
+      const timeMin = new Date().toISOString();
+      const timeMax = new Date(Date.now() + days * 86400000).toISOString();
+      try {
+        const cfb = await combinedFreeBusy(timeMin, timeMax);
+        const free = invertBusyToFree(cfb.merged, timeMin, timeMax).slice(0, 40);
+        return res.json({ connectedCount: cfb.connectedCount, perPerson: cfb.perPerson.map((p) => ({ email: p.email, connected: p.connected, busyCount: p.busy.length })), free });
+      } catch (e) { console.error('[calendar freebusy]', e.message); return res.status(502).json({ error: 'Could not read free/busy.' }); }
+    }
     const days = parseInt(req.query.days, 10) || 7;
     return res.json(await getUpcomingEvents(days));
   }

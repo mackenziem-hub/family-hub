@@ -25,6 +25,9 @@ function toolCardData(name, result, input) {
   if (name === 'check_off_grocery' && r.checked_off) return { kind: 'grocery_check', name: r.checked_off };
   if (name === 'add_calendar_event' && r.ok && r.added) return { kind: 'event', summary: input?.summary || null, start: input?.start || null };
   if (name === 'log_play_moment' && r.celebrated) return { kind: 'play' };
+  if (name === 'update_profile' && r.ok) return { kind: 'profile', updated: r.updated };
+  if (name === 'remember' && r.ok) return { kind: 'memory', content: r.remembered, status: r.status };
+  if (name === 'find_free_time' && r.ok && r.connected) return { kind: 'freebusy', connected: r.connected, not_connected: r.not_connected, slots: (r.free_slots || []).slice(0, 4) };
   return null;
 }
 
