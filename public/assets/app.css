@@ -253,3 +253,50 @@ html[data-skin="cozy"]    .empty { background-image: url(/assets/art/empty-cozy.
 html[data-skin="playful"] body { background-image: url(/assets/art/texture-playful.png); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; }
 html[data-skin="calm"]    body { background-image: url(/assets/art/texture-calm.png); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; }
 html[data-skin="cozy"]    body { background-image: url(/assets/art/texture-cozy.png); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; }
+
+/* ============================================================
+   Chat delivery (minimal & clean): markdown, typing dots,
+   inline result cards, gentle entrance motion.
+   ============================================================ */
+.msg { animation: msgIn .18s ease-out; line-height: 1.5; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* Markdown inside assistant bubbles */
+.msg.assistant p { margin: 0 0 7px; }
+.msg.assistant p:last-child { margin-bottom: 0; }
+.msg.assistant ul, .msg.assistant ol { margin: 6px 0; padding-left: 20px; }
+.msg.assistant li { margin: 2px 0; }
+.msg.assistant code { background: var(--bg-2); border: 1px solid var(--border-soft); padding: 1px 5px; border-radius: 6px; font-size: 90%; }
+.msg.assistant strong { font-weight: 700; }
+.msg.assistant a { color: var(--accent); text-decoration: underline; }
+
+/* Tool status (subtle, centered) */
+.msg.tool { align-self: center; background: transparent; color: var(--text-dim); font-size: 12px; opacity: .8; padding: 0; }
+
+/* Typing indicator */
+.typing-bubble { padding-top: 14px; padding-bottom: 14px; }
+.typing { display: inline-flex; gap: 5px; align-items: center; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); display: inline-block; animation: blink 1.2s infinite both; }
+.typing i:nth-child(2) { animation-delay: .2s; }
+.typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* Inline result cards (clean components for logged actions) */
+.chat-card {
+  align-self: flex-start; max-width: 86%;
+  background: var(--card-2); border: 1px solid var(--border-soft); border-left: 3px solid var(--accent);
+  border-radius: 12px; padding: 10px 13px; box-shadow: var(--card-shadow);
+  animation: msgIn .18s ease-out;
+}
+.chat-card .cc-h { font-size: 12px; font-weight: 700; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.chat-card .cc-ico { font-size: 14px; }
+.chat-card .cc-big { font-size: 22px; font-weight: 800; margin-top: 3px; }
+.chat-card .cc-big span { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.chat-card .cc-row { display: flex; gap: 14px; margin-top: 5px; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+.chat-card .cc-line { font-weight: 600; margin-top: 3px; }
+.chat-card .cc-when { color: var(--text-dim); font-weight: 400; font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .msg, .chat-card { animation: none; }
+  .typing i { animation: none; opacity: .6; }
+}

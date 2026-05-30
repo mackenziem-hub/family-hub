@@ -12,6 +12,21 @@ import { PERSONA, KIDS_SYSTEM_PROMPT, buildAssistantContext } from '../lib/conte
 const HISTORY_LIMIT = 20;
 const MAX_TOOL_ROUNDS = 5;
 
+// Compact, client-renderable summary of a successful tool action, so the chat UI
+// can show a clean result card instead of plain text. Returns null for tools that
+// don't warrant a card (reads), failures, or anything unexpected.
+function toolCardData(name, result, input) {
+  if (!result || result.error) return null;
+  const r = result;
+  if (name === 'log_meal' && r.logged) return { kind: 'meal', calories: r.logged.calories, protein_g: r.logged.protein_g, carbs_g: r.logged.carbs_g, fat_g: r.logged.fat_g };
+  if (name === 'log_fitness' && r.logged) return { kind: 'fitness', steps: r.logged.steps, active_minutes: r.logged.active_minutes, sleep_minutes: r.logged.sleep_minutes };
+  if (name === 'add_grocery_item' && r.added) return { kind: 'grocery', name: r.added.name, quantity: r.added.quantity };
+  if (name === 'check_off_grocery' && r.checked_off) return { kind: 'grocery_check', name: r.checked_off };
+  if (name === 'add_calendar_event' && r.ok && r.added) return { kind: 'event', summary: input?.summary || null, start: input?.start || null };
+  if (name === 'log_play_moment' && r.celebrated) return { kind: 'play' };
+  return null;
+}
+
 async function handler(req, res) {
   // History for the chat UI on load (most recent messages, oldest first).
   if (req.method === 'GET') {
@@ -79,7 +94,7 @@ async function handler(req, res) {
         sse({ type: 'tool_start', name: block.name });
         const result = await executeTool(block.name, block.input, { userId });
         toolActions.push({ tool: block.name, input: block.input, ok: !result.error });
-        sse({ type: 'tool_end', name: block.name, ok: !result.error });
+        sse({ type: 'tool_end', name: block.name, ok: !result.error, data: toolCardData(block.name, result, block.input) });
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
       }
       messages.push({ role: 'user', content: toolResults });

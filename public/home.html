@@ -58,24 +58,74 @@
       }
       function scrollDown() { window.scrollTo(0, document.body.scrollHeight); }
 
+      // Tiny safe markdown: escape first, then a handful of inline + block rules.
+      function md(src) {
+        let s = esc(src);
+        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+        s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+        s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        const lines = s.split('\n'); let out = '', ul = false, ol = false;
+        const close = () => { if (ul) { out += '</ul>'; ul = false; } if (ol) { out += '</ol>'; ol = false; } };
+        for (const line of lines) {
+          const mu = line.match(/^\s*[-*]\s+(.*)$/), mo = line.match(/^\s*\d+\.\s+(.*)$/);
+          if (mu) { if (!ul) { close(); out += '<ul>'; ul = true; } out += '<li>' + mu[1] + '</li>'; }
+          else if (mo) { if (!ol) { close(); out += '<ol>'; ol = true; } out += '<li>' + mo[1] + '</li>'; }
+          else if (!line.trim()) { close(); }
+          else { close(); out += '<p>' + line + '</p>'; }
+        }
+        close(); return out;
+      }
       function addBubble(role, text) {
         const div = document.createElement('div');
         div.className = 'msg ' + role;
-        div.textContent = text || '';
-        log.appendChild(div);
-        scrollDown();
-        return div;
+        if (role === 'assistant') div.innerHTML = md(text); else div.textContent = text || '';
+        log.appendChild(div); scrollDown(); return div;
       }
-      function addTool(name, ok) {
-        const labels = {
-          add_grocery_item: 'Adding to groceries', check_off_grocery: 'Checking off',
-          list_groceries: 'Reading the list', get_calendar: 'Checking the calendar',
-        };
+      function addTyping() {
         const div = document.createElement('div');
-        div.className = 'msg tool';
-        div.textContent = (ok === false ? '⚠ ' : '✓ ') + (labels[name] || name);
-        log.appendChild(div);
-        scrollDown();
+        div.className = 'msg assistant typing-bubble';
+        div.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+        log.appendChild(div); scrollDown(); return div;
+      }
+      const TOOL_LABELS = {
+        add_grocery_item: 'Added to groceries', check_off_grocery: 'Checked off',
+        list_groceries: 'Read the list', get_calendar: 'Checked the calendar',
+        add_calendar_event: 'Added to calendar', log_meal: 'Logged a meal',
+        get_nutrition_today: 'Checked nutrition', set_nutrition_target: 'Set a target',
+        get_fitness_today: 'Checked activity', log_fitness: 'Logged activity',
+        find_local_events: 'Found things to do', save_kid_item: 'Saved an idea',
+        list_saved_items: 'Read saved ideas', log_play_moment: 'Logged a moment',
+      };
+      function addTool(name, ok) {
+        const div = document.createElement('div'); div.className = 'msg tool';
+        div.textContent = (ok === false ? '⚠ ' : '') + (TOOL_LABELS[name] || name);
+        log.appendChild(div); scrollDown();
+      }
+      const num = (v) => (v != null ? Number(v).toLocaleString() : '--');
+      function addCard(d) {
+        const div = document.createElement('div'); div.className = 'chat-card';
+        let html = '';
+        if (d.kind === 'meal') {
+          html = '<div class="cc-h"><span class="cc-ico">🍽️</span> Meal logged</div>' +
+            '<div class="cc-big">' + num(d.calories) + ' <span>kcal</span></div>' +
+            '<div class="cc-row"><span>P ' + num(d.protein_g) + 'g</span><span>C ' + num(d.carbs_g) + 'g</span><span>F ' + num(d.fat_g) + 'g</span></div>';
+        } else if (d.kind === 'fitness') {
+          const bits = [];
+          if (d.steps != null) bits.push('<span>' + num(d.steps) + ' steps</span>');
+          if (d.active_minutes != null) bits.push('<span>' + d.active_minutes + ' active min</span>');
+          if (d.sleep_minutes != null) bits.push('<span>' + (d.sleep_minutes / 60).toFixed(1) + 'h sleep</span>');
+          html = '<div class="cc-h"><span class="cc-ico">👟</span> Activity logged</div><div class="cc-row">' + bits.join('') + '</div>';
+        } else if (d.kind === 'grocery') {
+          html = '<div class="cc-h"><span class="cc-ico">🛒</span> Added</div><div class="cc-line">' + esc(d.name) + (d.quantity ? ' · ' + esc(d.quantity) : '') + '</div>';
+        } else if (d.kind === 'grocery_check') {
+          html = '<div class="cc-h"><span class="cc-ico">✓</span> Checked off</div><div class="cc-line">' + esc(d.name) + '</div>';
+        } else if (d.kind === 'event') {
+          html = '<div class="cc-h"><span class="cc-ico">📅</span> Added to calendar</div><div class="cc-line">' + esc(d.summary || 'Event') + (d.start ? '<span class="cc-when"> · ' + esc(d.start) + '</span>' : '') + '</div>';
+        } else if (d.kind === 'play') {
+          html = '<div class="cc-h"><span class="cc-ico">🎉</span> Nice move together</div>';
+        } else { return; }
+        div.innerHTML = html; log.appendChild(div); scrollDown();
       }
 
       // Auto-grow textarea.
@@ -94,9 +144,9 @@
         busy = true; sendBtn.disabled = true;
         input.value = ''; input.style.height = 'auto';
         addBubble('user', text);
-        const assistant = addBubble('assistant', '');
-        assistant.innerHTML = '<span class="spin"></span>';
-        let started = false;
+        const typing = addTyping();
+        let assistant = null, raw = '', started = false, cardAdded = false;
+        const ensure = () => { if (!assistant) { assistant = document.createElement('div'); assistant.className = 'msg assistant'; log.insertBefore(assistant, typing); } return assistant; };
 
         try {
           const res = await fetch('/api/chat', {
@@ -108,7 +158,7 @@
           if (!res.ok || !res.body) {
             let msg = 'Something went wrong.';
             try { msg = (await res.json()).message || msg; } catch {}
-            assistant.className = 'msg err'; assistant.textContent = msg;
+            typing.remove(); const e = ensure(); e.className = 'msg err'; e.textContent = msg;
             return;
           }
 
@@ -127,27 +177,25 @@
               if (!dataLine) continue;
               let d; try { d = JSON.parse(dataLine); } catch { continue; }
               if (d.type === 'text') {
-                if (!started) { assistant.textContent = ''; started = true; }
-                assistant.textContent += d.text; scrollDown();
-              } else if (d.type === 'tool_start') {
-                // show after the (possibly empty) assistant bubble
-                addTool(d.name);
+                started = true; typing.style.display = 'none';
+                ensure(); raw += d.text; assistant.textContent = raw; scrollDown();
               } else if (d.type === 'tool_end') {
-                if (d.ok === false) addTool(d.name, false);
+                if (d.data) { addCard(d.data); cardAdded = true; }
+                else if (d.ok === false) addTool(d.name, false);
               } else if (d.type === 'error') {
-                assistant.className = 'msg err'; assistant.textContent = d.message || 'Assistant error.';
+                typing.remove(); const e = ensure(); e.className = 'msg err'; e.textContent = d.message || 'Assistant error.';
               } else if (d.type === 'done') {
-                if (!started && assistant.textContent.indexOf('spin') === -1 && !assistant.textContent) {
-                  assistant.textContent = 'Done.';
-                }
+                typing.remove();
+                if (started && assistant) assistant.innerHTML = md(raw);
+                else if (!started && !cardAdded) addBubble('assistant', 'Done.');
               }
             }
           }
-          if (!started && assistant.querySelector && assistant.querySelector('.spin')) {
-            assistant.textContent = 'Done.';
-          }
+          try { typing.remove(); } catch {}
+          if (started && assistant) assistant.innerHTML = md(raw);
         } catch (err) {
-          assistant.className = 'msg err'; assistant.textContent = 'Network error. Try again.';
+          try { typing.remove(); } catch {}
+          const e = addBubble('assistant', ''); e.className = 'msg err'; e.textContent = 'Network error. Try again.';
         } finally {
           busy = false; sendBtn.disabled = false; input.focus(); scrollDown();
         }
