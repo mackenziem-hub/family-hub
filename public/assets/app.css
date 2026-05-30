@@ -17,6 +17,9 @@
   --warn: #f5c451;
   --radius: 16px;
   --tabbar-h: 64px;
+  --on-accent: #06221d;          /* text/icon color on top of --accent */
+  --bar-bg: rgba(10, 14, 26, 0.92); /* tabbar + composer translucent backdrop */
+  --card-shadow: none;           /* light skins add a soft shadow */
 }
 
 * { box-sizing: border-box; }
@@ -51,6 +54,7 @@ body {
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 14px;
+  box-shadow: var(--card-shadow);
 }
 .card.glow { border-top: 2px solid var(--accent); }
 .card h2 { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
@@ -59,7 +63,7 @@ body {
 /* Buttons */
 .btn {
   appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 700;
-  border-radius: 999px; padding: 12px 18px; background: var(--accent); color: #06221d;
+  border-radius: 999px; padding: 12px 18px; background: var(--accent); color: var(--on-accent);
   transition: filter .12s ease, transform .04s ease;
 }
 .btn:active { transform: translateY(1px); }
@@ -93,7 +97,7 @@ body {
   flex: 0 0 auto; display: grid; place-items: center; cursor: pointer; color: transparent;
   font-size: 14px; font-weight: 900;
 }
-.list-item.done .check { background: var(--accent); border-color: var(--accent); color: #06221d; }
+.list-item.done .check { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .list-item .body { flex: 1; min-width: 0; }
 .list-item .name { font-weight: 600; }
 .list-item.done .name { text-decoration: line-through; color: var(--text-muted); }
@@ -117,7 +121,7 @@ body {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
-  background: rgba(10, 14, 26, 0.92);
+  background: var(--bar-bg);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-soft);
   display: flex; justify-content: space-around; align-items: stretch;
@@ -133,7 +137,7 @@ body {
 .app.has-composer { padding-bottom: calc(var(--tabbar-h) + 84px + env(safe-area-inset-bottom)); }
 .chat-log { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .msg { max-width: 86%; padding: 10px 13px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; }
-.msg.user { align-self: flex-end; background: var(--accent); color: #06221d; border-bottom-right-radius: 4px; font-weight: 500; }
+.msg.user { align-self: flex-end; background: var(--accent); color: var(--on-accent); border-bottom-right-radius: 4px; font-weight: 500; }
 .msg.assistant { align-self: flex-start; background: var(--card-2); border: 1px solid var(--border-soft); border-bottom-left-radius: 4px; }
 .msg.tool { align-self: flex-start; background: transparent; color: var(--text-dim); font-size: 12px; padding: 2px 4px; }
 .msg.err { align-self: flex-start; background: transparent; color: var(--danger); font-size: 13px; }
@@ -141,7 +145,7 @@ body {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   width: 100%; max-width: 480px; display: flex; gap: 8px; align-items: flex-end;
-  padding: 10px 16px; background: rgba(10, 14, 26, 0.96); backdrop-filter: blur(10px);
+  padding: 10px 16px; background: var(--bar-bg); backdrop-filter: blur(10px);
   border-top: 1px solid var(--border-soft);
 }
 .composer textarea {
@@ -156,3 +160,96 @@ body {
 .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--text-muted);
   border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   SKINS - selectable via assets/skin.js (data-skin on <html>).
+   :root above is the default "Midnight" (dark) skin. The three
+   below are light directions; they only remap design tokens, so
+   every component picks them up automatically.
+   ============================================================ */
+
+/* 1 - Playful: bright teal-mint + coral, chunky rounded, soft glow */
+html[data-skin="playful"] {
+  --bg: #effdfa; --bg-2: #e3f9f3;
+  --card: #ffffff; --card-2: #ffffff;
+  --border: rgba(45, 212, 191, 0.40); --border-soft: rgba(15, 23, 42, 0.08);
+  --text: #0f2e2a; --text-dim: #4f726c; --text-muted: #93a8a4;
+  --accent: #14b8a6; --accent-hi: #2dd4bf; --accent-2: #fb7185;
+  --success: #16a34a; --danger: #ef4444; --warn: #f59e0b;
+  --on-accent: #ffffff;
+  --radius: 22px;
+  --card-shadow: 0 10px 26px rgba(20, 184, 166, 0.16);
+  --bar-bg: rgba(255, 255, 255, 0.94);
+}
+
+/* 2 - Calm: sage + soft teal on near-white, minimal, low sensory load */
+html[data-skin="calm"] {
+  --bg: #fafbfa; --bg-2: #f1f5f3;
+  --card: #ffffff; --card-2: #ffffff;
+  --border: rgba(91, 140, 118, 0.28); --border-soft: rgba(15, 23, 42, 0.06);
+  --text: #2f3a36; --text-dim: #6b7a73; --text-muted: #9aa8a2;
+  --accent: #5b8c76; --accent-hi: #4e7d68; --accent-2: #8fb9c9;
+  --success: #5b8c76; --danger: #c2705f; --warn: #c9a45e;
+  --on-accent: #ffffff;
+  --radius: 14px;
+  --card-shadow: 0 4px 16px rgba(47, 58, 54, 0.06);
+  --bar-bg: rgba(250, 251, 250, 0.92);
+}
+
+/* 3 - Cozy: cream + terracotta + teal accent, warm and homey */
+html[data-skin="cozy"] {
+  --bg: #fdf6ec; --bg-2: #f7ecdb;
+  --card: #fffdf8; --card-2: #fffdf8;
+  --border: rgba(201, 116, 74, 0.32); --border-soft: rgba(80, 60, 40, 0.10);
+  --text: #4a3b30; --text-dim: #8a7461; --text-muted: #b3a08c;
+  --accent: #c9744a; --accent-hi: #b8623a; --accent-2: #5fb3a3;
+  --success: #6f9b6a; --danger: #c2503f; --warn: #d6a44e;
+  --on-accent: #fffaf3;
+  --radius: 18px;
+  --card-shadow: 0 6px 20px rgba(176, 120, 80, 0.14);
+  --bar-bg: rgba(253, 246, 236, 0.93);
+}
+
+/* ---- Per-skin hero illustrations (deep art pass, Wave 1) ----
+   Each illustration is baked on its skin's exact bg color, so a full-bleed
+   banner sits seamlessly on the matching page. Hidden on Midnight (dark),
+   where light-bg art wouldn't fit. Swaps automatically with the skin. */
+.skin-hero {
+  display: none; width: 100%; height: 150px;
+  border-radius: var(--radius); margin: 0 0 14px;
+  background-repeat: no-repeat; background-position: center; background-size: cover;
+}
+.login-hero { height: 172px; margin-top: 4px; }
+html[data-skin="playful"] .home-hero  { display: block; background-image: url(/assets/art/home-playful.png); }
+html[data-skin="calm"]    .home-hero  { display: block; background-image: url(/assets/art/home-calm.png); }
+html[data-skin="cozy"]    .home-hero  { display: block; background-image: url(/assets/art/home-cozy.png); }
+html[data-skin="playful"] .login-hero { display: block; background-image: url(/assets/art/login-playful.png); }
+html[data-skin="calm"]    .login-hero { display: block; background-image: url(/assets/art/login-calm.png); }
+html[data-skin="cozy"]    .login-hero { display: block; background-image: url(/assets/art/login-cozy.png); }
+html[data-skin="playful"] .kids-hero  { display: block; background-image: url(/assets/art/kids-playful.png); }
+html[data-skin="calm"]    .kids-hero  { display: block; background-image: url(/assets/art/kids-calm.png); }
+html[data-skin="cozy"]    .kids-hero  { display: block; background-image: url(/assets/art/kids-cozy.png); }
+
+/* ---- Wave 2: section headers (groceries / calendar / food) ---- */
+html[data-skin="playful"] .groceries-hero { display: block; background-image: url(/assets/art/groceries-playful.png); }
+html[data-skin="calm"]    .groceries-hero { display: block; background-image: url(/assets/art/groceries-calm.png); }
+html[data-skin="cozy"]    .groceries-hero { display: block; background-image: url(/assets/art/groceries-cozy.png); }
+html[data-skin="playful"] .calendar-hero  { display: block; background-image: url(/assets/art/calendar-playful.png); }
+html[data-skin="calm"]    .calendar-hero  { display: block; background-image: url(/assets/art/calendar-calm.png); }
+html[data-skin="cozy"]    .calendar-hero  { display: block; background-image: url(/assets/art/calendar-cozy.png); }
+html[data-skin="playful"] .food-hero      { display: block; background-image: url(/assets/art/food-playful.png); }
+html[data-skin="calm"]    .food-hero      { display: block; background-image: url(/assets/art/food-calm.png); }
+html[data-skin="cozy"]    .food-hero      { display: block; background-image: url(/assets/art/food-cozy.png); }
+
+/* ---- Wave 2: empty-state sprout (sits above the text; art bg matches the card) ---- */
+html[data-skin="playful"] .empty, html[data-skin="calm"] .empty, html[data-skin="cozy"] .empty {
+  background-repeat: no-repeat; background-position: top center; background-size: 78px; padding-top: 98px;
+}
+html[data-skin="playful"] .empty { background-image: url(/assets/art/empty-playful.png); }
+html[data-skin="calm"]    .empty { background-image: url(/assets/art/empty-calm.png); }
+html[data-skin="cozy"]    .empty { background-image: url(/assets/art/empty-cozy.png); }
+
+/* ---- Wave 2: subtle per-skin background texture (very faint; cards stay opaque) ---- */
+html[data-skin="playful"] body { background-image: url(/assets/art/texture-playful.png); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; }
+html[data-skin="calm"]    body { background-image: url(/assets/art/texture-calm.png); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; }
+html[data-skin="cozy"]    body { background-image: url(/assets/art/texture-cozy.png); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; }

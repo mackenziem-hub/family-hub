@@ -7,6 +7,7 @@
   <title>Food - Family Hub</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/app.css" />
+  <script src="/assets/skin.js"></script>
   <script src="/assets/auth-guard.js"></script>
   <style>
     .bar { height: 8px; border-radius: 999px; background: var(--bg-2); overflow: hidden; margin-top: 4px; }
@@ -27,6 +28,8 @@
 <body>
   <div class="app">
     <div class="app-header"><div><h1>🍎 Food</h1><div class="sub" id="sub">Today</div></div></div>
+
+    <div class="skin-hero food-hero"></div>
 
     <div class="card glow">
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
@@ -262,34 +265,28 @@
         } catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
       });
 
-      // Fitbit activity card.
+      // Activity card. Shows today's activity from whatever source (self-logged via the
+      // assistant, or Fitbit if ever connected). Gentle trends only, never a target.
       async function loadFitness() {
         const card = document.getElementById('fitnessCard');
         const body = document.getElementById('fitnessBody');
-        let status;
-        try { status = await api.get('/api/fitbit-oauth?action=status'); } catch { return; }
-        if (!status.configured && !status.connected) { card.hidden = true; return; }
         card.hidden = false;
-        if (!status.connected) {
-          body.innerHTML = `<p class="muted">Connect Fitbit to see steps and activity here. Gentle trends only, no targets.</p><button class="btn block" id="connectFitbit">Connect Fitbit</button>`;
-          document.getElementById('connectFitbit').addEventListener('click', async () => {
-            try { const { url } = await api.get('/api/fitbit-oauth?action=start'); window.location.href = url; }
-            catch (e) { errorEl.textContent = e.message; }
-          });
+        let f;
+        try { f = await api.get('/api/fitness'); }
+        catch { card.hidden = true; return; }
+        if (f.busy) { body.innerHTML = '<div class="muted">Fitbit is busy, check back shortly.</div>'; return; }
+        const t = f.today;
+        if (!t || (t.steps == null && t.active_minutes == null && t.sleep_minutes == null && t.calories_out == null)) {
+          body.innerHTML = `<p class="muted">No activity logged today. On the Home tab, just tell the assistant (e.g. "I walked 8,000 steps and slept 7 hours") and it shows up here. Gentle trends only, no targets.</p>`;
           return;
         }
-        body.innerHTML = '<div class="muted">Syncing Fitbit...</div>';
-        try {
-          const f = await api.get('/api/fitness');
-          if (f.busy) { body.innerHTML = '<div class="muted">Fitbit is busy, check back shortly.</div>'; return; }
-          const t = f.today || {};
-          const n = (v) => (v != null ? Number(v).toLocaleString() : '--');
-          body.innerHTML = `<div class="macros">
-            <div class="m"><div class="k">Steps</div><div class="val">${n(t.steps)}</div></div>
-            <div class="m"><div class="k">Active min</div><div class="val">${t.active_minutes != null ? t.active_minutes : '--'}</div></div>
-            <div class="m"><div class="k">Cals out</div><div class="val">${n(t.calories_out)}</div></div>
-          </div><p class="muted" style="margin-top:8px;">Nice moving today. Trends only, no targets.</p>`;
-        } catch { body.innerHTML = '<div class="muted">Could not load Fitbit right now.</div>'; }
+        const n = (v) => (v != null ? Number(v).toLocaleString() : '--');
+        const sleepH = t.sleep_minutes != null ? (t.sleep_minutes / 60).toFixed(1) + 'h' : '--';
+        body.innerHTML = `<div class="macros">
+          <div class="m"><div class="k">Steps</div><div class="val">${n(t.steps)}</div></div>
+          <div class="m"><div class="k">Active min</div><div class="val">${t.active_minutes != null ? t.active_minutes : '--'}</div></div>
+          <div class="m"><div class="k">Sleep</div><div class="val">${sleepH}</div></div>
+        </div><p class="muted" style="margin-top:8px;">${f.source === 'fitbit' ? 'From Fitbit. ' : 'Self-logged. '}Nice moving today. Trends only, no targets.</p>`;
       }
 
       // Move-together (active) card. Hidden if the active API is not available yet.

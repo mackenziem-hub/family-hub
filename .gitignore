@@ -5,3 +5,5 @@ node_modules
 family.local.json
 *.log
 .DS_Store
+
+.vercel
