@@ -9,6 +9,7 @@ import { callClaudeStream, anthropicConfigured } from '../lib/claude.js';
 import { getTools, executeTool } from '../lib/tools.js';
 import { PERSONA, KIDS_SYSTEM_PROMPT, buildAssistantContext } from '../lib/context.js';
 import { specialistPack, SPECIALIST_SAFETY } from '../lib/specialists.js';
+import { safetyPrescreen } from '../lib/safety.js';
 
 const HISTORY_LIMIT = 20;
 const MAX_TOOL_ROUNDS = 5;
@@ -49,6 +50,22 @@ async function handler(req, res) {
   const message = reqBody.message;
   const mode = reqBody.mode;
   if (!message || !String(message).trim()) return res.status(400).json({ error: 'message required' });
+
+  // Deterministic safety gate: detection GATES generation (runs before the model).
+  // Crisis / disordered-eating / clinical -> fixed safe reply, no model call.
+  const screen = safetyPrescreen(message);
+  if (screen.block) {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.flushHeaders?.();
+    const w = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
+    try { await supabaseAdmin.from('chat_messages').insert({ user_id: req.session.user_id, role: 'user', content: String(message).trim() }); } catch {}
+    w({ type: 'text', text: screen.reply });
+    try { await supabaseAdmin.from('chat_messages').insert({ user_id: req.session.user_id, role: 'assistant', content: screen.reply }); } catch {}
+    w({ type: 'done' });
+    return res.end();
+  }
+
   if (!anthropicConfigured()) {
     return res.status(503).json({ error: 'assistant_not_configured', message: 'ANTHROPIC_API_KEY is not set yet.' });
   }
