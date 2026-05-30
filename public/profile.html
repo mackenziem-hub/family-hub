@@ -61,6 +61,23 @@
     </div>
 
     <div class="card">
+      <h2>Fast-forward: import from another AI</h2>
+      <p class="hint">Paste what ChatGPT or Claude already knows about you (their saved "memories"), or drop your full data-export file. It distills the useful facts and shows you a preview before anything is saved.</p>
+      <textarea class="input" id="importText" style="min-height:88px;margin-top:8px;" placeholder="Paste your ChatGPT / Claude memories or notes here..."></textarea>
+      <div class="uprow">
+        <button class="btn ghost" id="distillBtn">Distill paste</button>
+        <button class="btn ghost" id="importFileBtn">Import export file</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden />
+        <span class="hint" id="importStatus"></span>
+      </div>
+      <div id="importReview" hidden style="margin-top:12px;border-top:1px solid var(--border-soft);padding-top:12px;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px;">Proposed additions</div>
+        <div id="reviewBody" class="hint" style="color:var(--text);line-height:1.6;"></div>
+        <div class="uprow"><button class="btn" id="applyImport">Apply to my profile</button><button class="btn ghost" id="discardImport">Discard</button></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Photo bank</h2>
       <p class="hint">Snap your pantry, fridge, meals, workout space, or the kids' art. The assistant reads them so its suggestions are grounded in what you actually have.</p>
       <div class="uprow">
@@ -157,6 +174,106 @@
           img.onerror = reject; img.src = url;
         });
       }
+
+      // ---- Import from another AI (memories paste or full export) ----
+      let pending = null;
+      const importStatus = $('importStatus');
+      const longest = (a, b) => (((b || '').length > (a || '').length ? b : a) || '');
+      function uniq() { const s = new Set(); for (const a of arguments) for (const x of (a || [])) { const v = String(x).trim(); if (v) s.add(v); } return Array.from(s).slice(0, 80); }
+      function mergeFacts(a, b) {
+        a = a || {}; b = b || {};
+        return {
+          diet: longest(a.diet, b.diet), goals: longest(a.goals, b.goals),
+          personality: longest(a.personality, b.personality), north_star: longest(a.north_star, b.north_star),
+          allergies: uniq(a.allergies, b.allergies), dislikes: uniq(a.dislikes, b.dislikes),
+          interests: uniq(a.interests, b.interests), hobbies: uniq(a.hobbies, b.hobbies), notes: uniq(a.notes, b.notes),
+        };
+      }
+      function renderReview(f) {
+        const rows = [];
+        const line = (label, val) => { if (val && (!Array.isArray(val) || val.length)) rows.push('<div><strong>' + label + ':</strong> ' + (Array.isArray(val) ? val.join(', ') : String(val)) + '</div>'); };
+        line('Diet', f.diet); line('Allergies', f.allergies); line('Avoids', f.dislikes);
+        line('Interests', f.interests); line('Hobbies', f.hobbies); line('Goals', f.goals);
+        line('How they tick', f.personality); line('North-star', f.north_star); line('Notes', f.notes);
+        $('reviewBody').innerHTML = rows.length ? rows.join('') : 'No clear new facts found.';
+        $('importReview').hidden = false;
+        $('applyImport').disabled = !rows.length;
+      }
+      async function distillText(text) { const { facts } = await api.post('/api/profile-import', { action: 'distill', text }); return facts || {}; }
+      function chunk(text, size, maxChunks) { const out = []; for (let i = 0; i < text.length && out.length < maxChunks; i += size) out.push(text.slice(i, i + size)); return out; }
+      function extractUserText(data) {
+        const out = [];
+        const arr = Array.isArray(data) ? data : [data];
+        let matched = false;
+        for (const conv of arr) {
+          if (conv && conv.mapping && typeof conv.mapping === 'object') { // ChatGPT export
+            for (const k in conv.mapping) {
+              const msg = conv.mapping[k] && conv.mapping[k].message;
+              if (msg && msg.author && msg.author.role === 'user') {
+                const parts = msg.content && msg.content.parts;
+                if (Array.isArray(parts)) out.push(parts.filter((x) => typeof x === 'string').join(' '));
+                matched = true;
+              }
+            }
+          } else if (conv && (Array.isArray(conv.chat_messages) || Array.isArray(conv.messages))) { // Claude export
+            const cm = conv.chat_messages || conv.messages;
+            for (const msg of cm) {
+              const role = msg.sender || msg.role;
+              if (role === 'human' || role === 'user') {
+                const t = msg.text || (Array.isArray(msg.content) ? msg.content.map((c) => (c && c.text) || '').join(' ') : msg.content);
+                if (t) out.push(String(t));
+                matched = true;
+              }
+            }
+          }
+        }
+        if (!matched) { const seen = []; const rec = (v, d) => { if (d > 6) return; if (typeof v === 'string') { if (v.length > 2 && v.length < 5000) seen.push(v); } else if (Array.isArray(v)) { for (const x of v) rec(x, d + 1); } else if (v && typeof v === 'object') { for (const kk in v) rec(v[kk], d + 1); } }; rec(data, 0); out.push(...seen); }
+        return out.join('\n').slice(0, 800000);
+      }
+      function refreshForm(profile) {
+        for (const k of STR) if (profile[k] != null) $(k).value = profile[k];
+        for (const k of ARR) if (Array.isArray(profile[k])) $(k).value = profile[k].join(', ');
+      }
+      $('distillBtn').addEventListener('click', async () => {
+        const text = $('importText').value.trim(); if (!text) return;
+        $('distillBtn').disabled = true; importStatus.textContent = 'Reading...';
+        try { pending = await distillText(text); renderReview(pending); importStatus.textContent = ''; }
+        catch (e) { importStatus.textContent = ''; if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+        finally { $('distillBtn').disabled = false; }
+      });
+      $('importFileBtn').addEventListener('click', () => $('importFile').click());
+      $('importFile').addEventListener('change', async () => {
+        const file = $('importFile').files[0]; if (!file) return;
+        $('importFile').value = '';
+        importStatus.textContent = 'Reading file...';
+        try {
+          const raw = await file.text();
+          let parsed = null; try { parsed = JSON.parse(raw); } catch {}
+          const text = parsed ? extractUserText(parsed) : raw.slice(0, 800000);
+          const chunks = chunk(text, 40000, 20);
+          if (!chunks.length) { importStatus.textContent = 'No readable text found.'; return; }
+          let merged = {};
+          for (let i = 0; i < chunks.length; i++) {
+            importStatus.textContent = 'Distilling ' + (i + 1) + '/' + chunks.length + '...';
+            try { merged = mergeFacts(merged, await distillText(chunks[i])); } catch {}
+          }
+          pending = merged; renderReview(pending);
+          importStatus.textContent = 'Done (' + chunks.length + ' chunk' + (chunks.length > 1 ? 's' : '') + ').';
+        } catch (e) { importStatus.textContent = ''; if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      });
+      $('applyImport').addEventListener('click', async () => {
+        if (!pending) return;
+        $('applyImport').disabled = true;
+        try {
+          const { profile } = await api.post('/api/profile-import', { action: 'apply', facts: pending });
+          $('importReview').hidden = true; $('importText').value = ''; pending = null;
+          if (profile) refreshForm(profile);
+          importStatus.textContent = 'Saved to your profile ✓';
+          setTimeout(() => { importStatus.textContent = ''; }, 4000);
+        } catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+        finally { $('applyImport').disabled = false; }
+      });
+      $('discardImport').addEventListener('click', () => { pending = null; $('importReview').hidden = true; });
 
       $('signOut').addEventListener('click', async () => {
         try { await api.post('/api/auth?action=logout'); } catch {}
