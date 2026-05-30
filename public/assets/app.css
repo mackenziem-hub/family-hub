@@ -300,3 +300,13 @@ html[data-skin="cozy"]    body { background-image: url(/assets/art/texture-cozy.
   .msg, .chat-card { animation: none; }
   .typing i { animation: none; opacity: .6; }
 }
+
+/* Specialist mode bar (Home chat) */
+.mode-bar { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; }
+.mode-bar::-webkit-scrollbar { display: none; }
+.mode-chip {
+  flex: 0 0 auto; border: 1px solid var(--border-soft); background: var(--card); color: var(--text-dim);
+  border-radius: 999px; padding: 7px 13px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.mode-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.mode-chip.ghost-chip { color: var(--accent); border-color: var(--border); background: transparent; }

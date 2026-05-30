@@ -8,6 +8,7 @@ import { readJson } from '../lib/http.js';
 import { callClaudeStream, anthropicConfigured } from '../lib/claude.js';
 import { getTools, executeTool } from '../lib/tools.js';
 import { PERSONA, KIDS_SYSTEM_PROMPT, buildAssistantContext } from '../lib/context.js';
+import { specialistPack, SPECIALIST_SAFETY } from '../lib/specialists.js';
 
 const HISTORY_LIMIT = 20;
 const MAX_TOOL_ROUNDS = 5;
@@ -41,7 +42,9 @@ async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { message } = await readJson(req);
+  const reqBody = (await readJson(req)) || {};
+  const message = reqBody.message;
+  const mode = reqBody.mode;
   if (!message || !String(message).trim()) return res.status(400).json({ error: 'message required' });
   if (!anthropicConfigured()) {
     return res.status(503).json({ error: 'assistant_not_configured', message: 'ANTHROPIC_API_KEY is not set yet.' });
@@ -74,9 +77,11 @@ async function handler(req, res) {
     // intentionally NOT cached: it holds live data (groceries, today's food,
     // calendar) that changes between turns, and caching would serve it stale.
     const system = [
-      { type: 'text', text: `${PERSONA}\n\n${KIDS_SYSTEM_PROMPT}`, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: `${PERSONA}\n\n${KIDS_SYSTEM_PROMPT}\n\n${SPECIALIST_SAFETY}`, cache_control: { type: 'ephemeral' } },
       { type: 'text', text: contextBlock },
     ];
+    const pack = specialistPack(mode);
+    if (pack) system.push({ type: 'text', text: pack });
     const tools = getTools();
 
     let messages = [...priorTurns, { role: 'user', content: String(message).trim() }];

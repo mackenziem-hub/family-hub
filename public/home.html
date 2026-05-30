@@ -32,6 +32,14 @@
       </a>
     </div>
 
+    <div class="mode-bar" id="modeBar">
+      <button class="mode-chip active" data-mode="general">General</button>
+      <button class="mode-chip" data-mode="nutrition">Nutrition</button>
+      <button class="mode-chip" data-mode="healthy">Healthy living</button>
+      <button class="mode-chip" data-mode="coach">Coach</button>
+      <button class="mode-chip ghost-chip" id="interviewBtn">Interview me</button>
+    </div>
+
     <div class="chat-log" id="chatLog"></div>
   </div>
 
@@ -48,6 +56,7 @@
       const input = document.getElementById('input');
       const sendBtn = document.getElementById('sendBtn');
       let busy = false;
+      let mode = 'general';
 
       const user = window.FamilyAuth && window.FamilyAuth.user;
       if (user && user.name) document.getElementById('greeting').textContent = `Hi ${user.name}`;
@@ -138,6 +147,16 @@
       });
       sendBtn.addEventListener('click', send);
 
+      document.querySelectorAll('.mode-chip[data-mode]').forEach((c) => c.addEventListener('click', () => {
+        mode = c.dataset.mode;
+        document.querySelectorAll('.mode-chip[data-mode]').forEach((x) => x.classList.toggle('active', x === c));
+      }));
+      document.getElementById('interviewBtn').addEventListener('click', () => {
+        if (busy) return;
+        input.value = 'Interview me to build out my profile. Ask me a couple of questions at a time and save what I tell you.';
+        send();
+      });
+
       async function send() {
         const text = input.value.trim();
         if (!text || busy) return;
@@ -152,7 +171,7 @@
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...window.FamilyAuth.headers() },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({ message: text, mode }),
           });
           if (res.status === 401) { window.FamilyAuth.clearAndRedirect(); return; }
           if (!res.ok || !res.body) {

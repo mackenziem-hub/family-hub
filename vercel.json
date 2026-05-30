@@ -1,6 +1,7 @@
 {
   "functions": {
-    "api/chat.js": { "maxDuration": 60 }
+    "api/chat.js": { "maxDuration": 60 },
+    "api/photos.js": { "maxDuration": 30 }
   },
   "crons": [
     { "path": "/api/cron-nb-events", "schedule": "0 13 * * *" }

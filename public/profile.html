@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>You - Family Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/app.css" />
+  <script src="/assets/skin.js"></script>
+  <script src="/assets/auth-guard.js"></script>
+  <style>
+    .pf label.fld { display:block; font-size:12px; color:var(--text-dim); margin:12px 0 5px; }
+    .pf textarea { min-height:64px; resize:vertical; }
+    .hint { font-size:12px; color:var(--text-muted); margin:2px 0 0; line-height:1.4; }
+    .photos { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
+    .ph { position:relative; aspect-ratio:1; border-radius:12px; overflow:hidden; border:1px solid var(--border-soft); background:var(--bg-2); }
+    .ph img { width:100%; height:100%; object-fit:cover; display:block; }
+    .ph .del { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.5); color:#fff; border:0; border-radius:50%; width:22px; height:22px; cursor:pointer; font-size:13px; line-height:1; }
+    .ph .cat { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.45); color:#fff; font-size:10px; padding:2px 5px; text-transform:capitalize; }
+    .uprow { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+    .uprow select.input { width:auto; flex:0 0 auto; }
+    .saved { color:var(--success); font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="app-header">
+      <div><h1>You</h1><div class="sub" id="sub">Your profile</div></div>
+      <button class="btn ghost" id="signOut" style="padding:8px 14px;font-size:13px;">Sign out</button>
+    </div>
+
+    <div class="card pf">
+      <h2>About you</h2>
+      <label class="fld" for="diet">Diet</label>
+      <input class="input" id="diet" placeholder="e.g. omnivore, vegetarian, low-carb" />
+      <label class="fld" for="allergies">Allergies (comma separated)</label>
+      <input class="input" id="allergies" placeholder="e.g. peanuts, shellfish" />
+      <label class="fld" for="dislikes">Foods you avoid</label>
+      <input class="input" id="dislikes" placeholder="e.g. cilantro, liver" />
+      <label class="fld" for="interests">Interests</label>
+      <input class="input" id="interests" placeholder="e.g. hiking, guitar, sci-fi" />
+      <label class="fld" for="hobbies">Hobbies</label>
+      <input class="input" id="hobbies" placeholder="e.g. woodworking, running" />
+      <label class="fld" for="personality">How you tick</label>
+      <textarea class="input" id="personality" placeholder="Communication style, what motivates you, what helps you follow through..."></textarea>
+      <label class="fld" for="goals">Current goals</label>
+      <textarea class="input" id="goals" placeholder="What are you working toward right now?"></textarea>
+    </div>
+
+    <div class="card pf glow">
+      <h2>North-star goals &amp; values</h2>
+      <p class="hint">The deeper picture the assistant coaches toward. Private to this app, separate from anything else. Write it however you like, or paste from your own notes.</p>
+      <textarea class="input" id="goals_doc" style="min-height:120px;margin-top:8px;" placeholder="Your long-term goals, values, and the kind of life you're building..."></textarea>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin:0 0 16px;">
+      <button class="btn" id="saveBtn">Save profile</button>
+      <span class="saved" id="savedMsg" hidden>Saved ✓</span>
+      <span class="toast" id="error"></span>
+    </div>
+
+    <div class="card">
+      <h2>Photo bank</h2>
+      <p class="hint">Snap your pantry, fridge, meals, workout space, or the kids' art. The assistant reads them so its suggestions are grounded in what you actually have.</p>
+      <div class="uprow">
+        <select class="input" id="cat">
+          <option value="pantry">Pantry</option>
+          <option value="fridge">Fridge</option>
+          <option value="meal">Meal</option>
+          <option value="workout">Workout space</option>
+          <option value="kids_art">Kids' art</option>
+          <option value="other" selected>Other</option>
+        </select>
+        <button class="btn ghost" id="addPhoto">📷 Add photo</button>
+        <input type="file" id="file" accept="image/*" capture="environment" hidden />
+        <span class="hint" id="upStatus"></span>
+      </div>
+      <div class="photos" id="photos"></div>
+      <div class="empty" id="noPhotos" hidden>No photos yet.</div>
+    </div>
+
+    <p class="toast" id="error2"></p>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script src="/assets/tabbar.js"></script>
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const errorEl = $('error');
+      const STR = ['diet', 'goals', 'goals_doc', 'personality'];
+      const ARR = ['allergies', 'dislikes', 'interests', 'hobbies'];
+
+      api.get('/api/profile').then(({ profile }) => {
+        for (const k of STR) if (profile[k] != null) $(k).value = profile[k];
+        for (const k of ARR) if (Array.isArray(profile[k])) $(k).value = profile[k].join(', ');
+      }).catch((e) => { if (e.message !== 'unauthorized') errorEl.textContent = e.message; });
+
+      $('saveBtn').addEventListener('click', async () => {
+        const body = {};
+        for (const k of STR) body[k] = $(k).value.trim();
+        for (const k of ARR) body[k] = $(k).value;
+        $('saveBtn').disabled = true;
+        try {
+          await api.patch('/api/profile', body);
+          const m = $('savedMsg'); m.hidden = false; setTimeout(() => { m.hidden = true; }, 2000);
+          errorEl.textContent = '';
+        } catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+        finally { $('saveBtn').disabled = false; }
+      });
+
+      const photosEl = $('photos'), noPhotos = $('noPhotos');
+      function render(list) {
+        photosEl.innerHTML = '';
+        noPhotos.hidden = list.length > 0;
+        for (const p of list) {
+          const d = document.createElement('div'); d.className = 'ph';
+          d.innerHTML = '<img src="' + p.url + '" alt="' + p.category + '" title="' + String(p.caption || '').replace(/"/g, '&quot;') + '"><span class="cat">' + p.category.replace('_', ' ') + '</span><button class="del" data-id="' + p.id + '">×</button>';
+          photosEl.appendChild(d);
+        }
+        photosEl.querySelectorAll('.del').forEach((b) => b.addEventListener('click', async () => {
+          b.disabled = true;
+          try { await api.del('/api/photos?id=' + encodeURIComponent(b.dataset.id)); load(); }
+          catch (e) { if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+        }));
+      }
+      function load() { api.get('/api/photos').then(({ photos }) => render(photos || [])).catch(() => {}); }
+      load();
+
+      $('addPhoto').addEventListener('click', () => $('file').click());
+      $('file').addEventListener('change', async () => {
+        const f = $('file').files[0]; if (!f) return;
+        $('file').value = '';
+        $('upStatus').textContent = 'Uploading...';
+        try {
+          const base64 = await downscale(f, 1600, 0.82);
+          const { photo } = await api.post('/api/photos', { image_base64: base64, media_type: 'image/jpeg', category: $('cat').value });
+          $('upStatus').textContent = photo && photo.caption ? 'Read: ' + photo.caption.slice(0, 64) : 'Added ✓';
+          load();
+          setTimeout(() => { $('upStatus').textContent = ''; }, 5000);
+        } catch (e) { $('upStatus').textContent = ''; if (e.message !== 'unauthorized') errorEl.textContent = e.message; }
+      });
+
+      function downscale(file, max, quality) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            let w = img.width, h = img.height;
+            if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            c.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(c.toDataURL('image/jpeg', quality).split(',')[1]);
+          };
+          img.onerror = reject; img.src = url;
+        });
+      }
+
+      $('signOut').addEventListener('click', async () => {
+        try { await api.post('/api/auth?action=logout'); } catch {}
+        if (window.FamilyAuth) window.FamilyAuth.clearAndRedirect();
+      });
+    })();
+  </script>
+</body>
+</html>
