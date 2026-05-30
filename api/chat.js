@@ -29,6 +29,7 @@ function toolCardData(name, result, input) {
   if (name === 'update_profile' && r.ok) return { kind: 'profile', updated: r.updated };
   if (name === 'remember' && r.ok) return { kind: 'memory', content: r.remembered, status: r.status };
   if (name === 'find_free_time' && r.ok && r.connected) return { kind: 'freebusy', connected: r.connected, not_connected: r.not_connected, slots: (r.free_slots || []).slice(0, 4) };
+  if (name === 'write_note' && r.ok) return { kind: 'note', path: r.saved };
   return null;
 }
 

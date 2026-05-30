@@ -155,6 +155,8 @@
           const slots = (d.slots || []).map((s) => '<div>' + fmt(s.start) + ' to ' + new Date(s.end).toLocaleString('en-CA', { hour: 'numeric', minute: '2-digit' }) + '</div>').join('');
           const nc = (d.not_connected && d.not_connected.length) ? '<div class="cc-when">Note: ' + esc(d.not_connected.join(', ')) + ' not connected</div>' : '';
           html = '<div class="cc-h"><span class="cc-ico">🗓️</span> Everyone free (' + d.connected + ' connected)</div>' + slots + nc;
+        } else if (d.kind === 'note') {
+          html = '<div class="cc-h"><span class="cc-ico">📓</span> Saved note</div><div class="cc-line">' + esc(d.path || '') + '</div>';
         } else { return; }
         div.innerHTML = html; log.appendChild(div); scrollDown();
       }
